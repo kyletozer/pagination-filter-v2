@@ -1,113 +1,118 @@
-
-var students = $('.student-item');
-var pageDiv = $('.page');
-var studentList = $('.student-list');
-var pageHeader = $('.page-header');
-
-// results displayed per page
-var studentsVisible = 10;
+'use strict';
 
 
-// outputs the pagination buttons to the page
-function renderPagination(arrayOfStudents, denomination){
-  var html = '<div class="pagination"><ul>';
-  var pageNumber = 1;
+var app = {
+  selectors: {
+    pageHeader: $('.page-header'),
+    studentItems: $('.student-item'),
+    studentList: $('.student-list'),
+  },
 
-  // adds a page index marker if the index of the denominator divides cleanly into the index of the current student or the denominator does not divide cleanly into the index of the last student in the array
-  arrayOfStudents.each(function(index){
-    var studentIndex = index + 1;
+  values: {
+    studentsPerPage: 10
+  },
 
-    if(studentIndex % denomination === 0 ||
-      (studentIndex === arrayOfStudents.length && studentIndex % denomination !== 0)){
-      html += '<li><a class="active" href="#">' + pageNumber + '</a></li>';
-      pageNumber++;
+  // helper function for retrieving the students name from it's DOM element
+  getStudentName: function(student){
+    return student.find('h3').text();
+  },
+
+  init: function(){
+    var {selectors} = this;
+
+    // appends the search form to the top of the page
+    selectors.pageHeader.append(function(){
+      var search = '';
+
+      search += '<div class="student-search">';
+      search += '<input placeholder="Search for students...">';
+      search += '<button>Search</button>';
+      search += '</div>';
+
+      return search;
+    });
+
+    app.renderPagination(1);
+  },
+
+  // rerenders the pagination and appropriate results each time it is run
+  renderPagination: function(page, search){
+    var {values, selectors, getStudentName} = this;
+
+    var upperLimit = values.studentsPerPage * page;
+    var pageNumber = 1;
+    var html = '';
+    var listOfNames = [];
+
+
+    // removes the "no results" message (if it exists in the DOM)
+    selectors.studentList.find('.no-results').remove();
+
+    // for advanced searching with pagination, I loop over the student DOM elements and push the student's names to a new array that contains only the students names and not the entire jQuery object
+    selectors.studentItems.each(function(){
+      var name = getStudentName($(this));
+
+      if(!search || (search && new RegExp(search, 'gi').test(name))){
+        listOfNames.push(name);
+      }
+    });
+
+    // hide all students and then show the appropriate students in the list based on the "search" argument
+    selectors.studentItems.each(function(){
+      var name = getStudentName($(this));
+      var studentIndex = listOfNames.indexOf(name) + 1;
+      var index = $(this).index() + 1;
+
+
+      $(this).hide();
+
+      if(studentIndex > (upperLimit - values.studentsPerPage) && studentIndex <= upperLimit){
+        $(this).show();
+      }
+    });
+
+    // loop through the list of names array containing all of the student's names that match the "search" term regex and use that to determine the page navigation
+    listOfNames.forEach(function(student, index){
+
+      if(index % values.studentsPerPage === 0 ||
+        (index === selectors.studentItems.length && index % values.studentsPerPage !== 0)){
+
+        html += '<li><a ';
+        if(page === pageNumber){html += 'class="active" ';}
+        html += 'href="#">' + pageNumber + '</a></li>';
+
+        pageNumber += 1;
+      }
+    });
+
+    // if the list of names array does not get filled, display the "no results" message to the user
+    if(listOfNames.length === 0){
+      selectors.studentList.prepend('<div class="no-results">No results were found for "' + search + '".</div>');
     }
-  });
 
-  html += '</ul></div>';
-  pageDiv.append(html);
+    // rendering the pagination to the DOM
+    selectors.studentList.find('.pagination').remove();
+    selectors.studentList.append('<div class="pagination"><ul>' + html + '</ul></div>');
+  }
+};
 
-  filterStudents(students, studentsVisible, 1);
-}
 
-// loops through student array and shows the only the students that lie between the page boundaries
-function filterStudents(arrayOfStudents, denomination, page){
-  var upperLimit = denomination * page;
+app.init();
 
-  studentList.find('.no-results').remove();
-
-  arrayOfStudents.each(function(){
-    var studentIndex = $(this).index();
-
-    $(this).attr('style', 'display:none');
-
-    if(studentIndex >= upperLimit - denomination && studentIndex < upperLimit){
-      $(this).attr('style', 'display:block');
-    }
-  });
-}
-
-// runs the filterStudents function with the index of the click passed in as an additional parameter for sorting through the list of students
-pageDiv.on('click', 'li', function(){
+// if the search field contains input, pass the input into the function to simulate search-term based pagination
+app.selectors.studentList.on('click', 'li', function(){
+  var {selectors} = app;
   var page = $(this).index() + 1;
+  var search = selectors.pageHeader.find('input').val();
 
-  // checks that the clicked li's parent does not have the 'student-list' class
-  if(!$(this).parent().hasClass('student-list')){
-    filterStudents(students, studentsVisible, page);
+  if(!$(this).hasClass('student-item')){
+    app.renderPagination.apply(app, [page, search]);
   }
 });
 
+//
+app.selectors.pageHeader.on('click', 'button', function(){
+  var input = $(this).siblings('input').val();
 
-// appends the search form to the ".page-header" div
-pageHeader.append(function(){
-  var html = '';
-
-  html += '<div class="student-search">';
-  html += '<input placeholder="Search for students...">';
-  html += '<button>Search</button>';
-  html += '</div>';
-
-  return html;
+  app.renderPagination(1, input.toLowerCase());
 });
-
-
-// triggers the click search button function on "enter" keypress
-pageHeader.on('keypress', 'input', function(event){
-  if(event.which === 13){
-    pageHeader.find('button').trigger('click');
-  }
-});
-
-
-// does a text-based search through the list of students
-$('.student-search').on('click', 'button', function(){
-  var searchInput = $(this).siblings('input').val();
-
-  // do nothing if the user tries to submit an empty search
-  if(searchInput === ''){return;}
-
-  var searchTerm = new RegExp(searchInput, 'gi');
-  var noResults = true;
-
-  studentList.find('.no-results').remove();
-
-  students.each(function(){
-    var studentName = $(this).find('h3').text();
-
-    $(this).attr('style', 'display:none');
-
-    if(searchTerm.test(studentName)){
-      noResults = false;
-      $(this).attr('style', 'display:block');
-    }
-    // console.log(studentName, searchTerm, searchTerm.test(studentName));
-  });
-
-  // appends the "No Results" message if noResults remains truthy and the ".no-results" div does not already exist within the studentList
-  if(noResults && studentList.find('.no-results').length < 1){
-    studentList.append('<div class="no-results"><h4>No Results</h4></div>');
-  }
-});
-
-
-renderPagination(students, studentsVisible);
